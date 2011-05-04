@@ -18,7 +18,6 @@
 
 #include <mach/board.h>
 
-
 #define MSM_SMI_BASE		0x02B00000
 #define MSM_SMI_SIZE		0x01500000
 

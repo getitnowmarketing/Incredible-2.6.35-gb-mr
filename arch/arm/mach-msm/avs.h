@@ -29,8 +29,11 @@
 #ifndef AVS_H
 #define AVS_H
 
-#define VOLTAGE_MIN  950 /* mV */
-#define VOLTAGE_MAX  1275
+//#include "board-incrediblec.h"
+#define VOLTAGE_MIN		CONFIG_CPU_FREQ_VDD_LEVELS_MIN
+#define VOLTAGE_MAX		CONFIG_CPU_FREQ_VDD_LEVELS_MAX
+
+#define VOLTAGE_MIN_START	975	// Minimum value to start off with
 #define VOLTAGE_STEP 25
 
 int __init avs_init(int (*set_vdd)(int), u32 freq_cnt, u32 freq_idx);
@@ -46,7 +49,7 @@ u32 avs_get_avsdscr(void);
 u32 avs_get_tscsr(void);
 void     avs_set_tscsr(u32 to_tscsr);
 
-/*#define AVSDEBUG(x...) pr_info("AVS: " x);*/
+//#define AVSDEBUG(x...) pr_info("AVS: " x);
 #define AVSDEBUG(...)
 
 #endif /* AVS_H */
