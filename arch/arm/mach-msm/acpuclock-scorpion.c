@@ -643,12 +643,14 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 #endif
 }
 
+
 #ifdef CONFIG_CPU_FREQ_VDD_LEVELS
 #ifndef CONFIG_MSM_CPU_AVS
 ssize_t acpuclk_get_vdd_levels_str(char *buf)
 {
 	int i, len = 0;
 	if (buf) {
+
 		mutex_lock(&drv_state.lock);
 		for (i = 0; acpu_freq_tbl[i].acpu_khz; i++) 
 		{
@@ -670,13 +672,16 @@ void acpuclk_set_vdd(unsigned acpu_khz, int vdd)
 		if (freq_table[i].frequency != CPUFREQ_ENTRY_INVALID)
 		{
 			if (acpu_khz == 0)
+
 				acpu_freq_tbl[i].vdd = min(max((acpu_freq_tbl[i].vdd + vdd), CONFIG_CPU_FREQ_VDD_LEVELS_MIN), 					CONFIG_CPU_FREQ_VDD_LEVELS_MAX);
+
 			else if (acpu_freq_tbl[i].acpu_khz == acpu_khz)
 				acpu_freq_tbl[i].vdd = min(max(vdd, CONFIG_CPU_FREQ_VDD_LEVELS_MIN), CONFIG_CPU_FREQ_VDD_LEVELS_MAX);
 		}
 	}
 	mutex_unlock(&drv_state.lock);
 }
+
 #endif
 #endif
->>>>>>> 092d517... Added interface for on the fly voltage modification for HAVS
+

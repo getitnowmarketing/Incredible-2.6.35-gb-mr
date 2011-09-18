@@ -120,6 +120,35 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
+<<<<<<< HEAD
+=======
+config CPU_FREQ_DEFAULT_GOV_SMARTASS
+        bool "smartass"
+        select CPU_FREQ_GOV_SMARTASS
+        select CPU_FREQ_GOV_PERFORMANCE
+        help
+          Use the CPUFreq governor 'smartass' as default.
+
+config CPU_FREQ_DEFAULT_GOV_SMARTASS2
+	bool "smartass2"
+	select CPU_FREQ_GOV_SMARTASS2
+	help
+	Use the CPUFreq governor 'smartassV2' as default.
+
+config CPU_FREQ_DEFAULT_GOV_SCARY
+	bool "scary"
+	select CPU_FREQ_GOV_SCARY
+	help
+		Use the CPUFreq governor 'scary' as default.
+
+config CPU_FREQ_DEFAULT_GOV_SUPERBAD
+	bool "superbad"
+	select CPU_FREQ_GOV_SUPERBAD
+	select CPU_FREQ_GOV_PERFORMANCE
+	help
+	  Use the CPUFreq governor 'superbad' as default.
+
+>>>>>>> 819be3c... add static vdd sysfs lower voltages add smartassv2 & scary & superbad
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -206,4 +235,55 @@ config CPU_FREQ_GOV_CONSERVATIVE
 
 	  If in doubt, say N.
 
+config CPU_FREQ_GOV_SMARTASS
+        tristate "'smartass' cpufreq governor"
+        depends on CPU_FREQ
+        help
+          'smartass' - a "smart" optimized governor for the hero!
+
+          If in doubt, say N.
+
+config CPU_FREQ_GOV_SMARTASS2
+ 	 tristate "'smartassV2' cpufreq governor"
+  	depends on CPU_FREQ
+  	help
+    	'smartassV2' - a "smart" optimized governor for the hero!
+
+    	If in doubt, say N.
+
+config CPU_FREQ_GOV_SUPERBAD
+	tristate "'superbad' cpufreq governor"
+	depends on CPU_FREQ
+	help
+	  'superbad' - a "superbad" super smooth rendition of a highly optimized "smartass" governor!
+
+	  If in doubt, say N.
+
+config CPU_FREQ_GOV_SCARY
+	tristate "'scary' cpufreq governor"
+	depends on CPU_FREQ
+	help
+		scary - a governor for cabbages
+
+		If in doubt, say N.
+
+
+config CPU_FREQ_VDD_LEVELS
+	bool "CPU Vdd levels sysfs interface"
+	depends on CPU_FREQ_STAT
+	depends on ARCH_QSD8X50
+	default n
+	help
+	  CPU Vdd levels sysfs interface
+
+config CPU_FREQ_VDD_LEVELS_MIN
+	int "Min VDD Level"
+	default 950
+
+config CPU_FREQ_VDD_LEVELS_MAX
+	int "Max VDD Level"
+	default 1325
+
+
+>>>>>>> 819be3c... add static vdd sysfs lower voltages add smartassv2 & scary & superbad
 endif	# CPU_FREQ
