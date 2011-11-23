@@ -18,6 +18,10 @@
 
 #include <mach/board.h>
 
+#define INCREDIBLEC_TPS65023_MIN_UV_MV    (850)
+#define INCREDIBLEC_TPS65023_MAX_UV_MV    (1350)
+#define INCREDIBLEC_TPS65023_UV_STEP_MV   (25)
+
 #define MSM_SMI_BASE		0x02B00000
 #define MSM_SMI_SIZE		0x01500000
 

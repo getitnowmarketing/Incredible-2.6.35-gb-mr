@@ -22,6 +22,7 @@
 #include <linux/errno.h>
 #include <linux/cpufreq.h>
 #include <linux/regulator/consumer.h>
+#include <linux/regulator/driver.h>
 
 #include <mach/board.h>
 #include <mach/msm_iomap.h>
@@ -31,7 +32,9 @@
 #include "proc_comm.h"
 #include "clock.h"
 
+#ifdef CONFIG_CPU_FREQ_VDD_LEVELS
 #include "board-incrediblec.h"
+#endif
 
 #if 0
 #define DEBUG(x...) pr_info(x)
@@ -62,6 +65,19 @@ struct clkctl_acpu_speed {
 	unsigned axiclk_khz;
 };
 
+static unsigned long max_axi_rate;
+
+struct regulator {
+	struct device *dev;
+	struct list_head list;
+	int uA_load;
+	int min_uV;
+	int max_uV;
+	char *supply_name;
+	struct device_attribute dev_attr;
+	struct regulator_dev *rdev;
+};
+
 /* clock sources */
 #define CLK_TCXO	0 /* 19.2 MHz */
 #define CLK_GLOBAL_PLL	1 /* 768 MHz */
@@ -76,28 +92,33 @@ struct clkctl_acpu_speed {
 #define SRC_PLL1	3 /* 768 MHz */
 
 struct clkctl_acpu_speed acpu_freq_tbl[] = {
-	{  19200, CCTL(CLK_TCXO, 1),		SRC_RAW, 0, 0, 1050, 14000},
-	{ 128000, CCTL(CLK_TCXO, 1),		SRC_AXI, 0, 0, 1050, 14000 },
-	{ 245000, CCTL(CLK_MODEM_PLL, 1),	SRC_RAW, 0, 0, 1050, 29000 },
+	{  19200, CCTL(CLK_TCXO, 1),		SRC_RAW, 0, 0, 975, 14000},
+	{ 128000, CCTL(CLK_TCXO, 1),		SRC_AXI, 0, 0, 975, 14000 },
+	{ 245000, CCTL(CLK_MODEM_PLL, 1),	SRC_RAW, 0, 0, 1000, 29000 },
 	/* Work arround for acpu resume hung, GPLL is turn off by arm9 */
 	/*{ 256000, CCTL(CLK_GLOBAL_PLL, 3),	SRC_RAW, 0, 0, 1050, 29000 },*/
-	{ 384000, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x0A, 0, 1050, 58000 },
-	{ 422400, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x0B, 0, 1050, 117000 },
-	{ 460800, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x0C, 0, 1050, 117000 },
-	{ 499200, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x0D, 0, 1075, 117000 },
-	{ 537600, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x0E, 0, 1100, 117000 },
-	{ 576000, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x0F, 0, 1100, 117000 },
-	{ 614400, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x10, 0, 1125, 117000 },
-	{ 652800, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x11, 0, 1150, 117000 },
-	{ 691200, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x12, 0, 1175, 117000 },
-	{ 729600, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x13, 0, 1200, 117000 },
-	{ 768000, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x14, 0, 1200, 128000 },
-	{ 806400, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x15, 0, 1225, 128000 },
-	{ 844800, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x16, 0, 1250, 128000 },
-	{ 883200, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x17, 0, 1275, 128000 },
-	{ 921600, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x18, 0, 1300, 128000 },
-	{ 960000, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x19, 0, 1300, 128000 },
-	{ 998400, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x1A, 0, 1300, 128000 },
+        { 384000, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x0A, 0, 1025, 58000 },
+        { 422400, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x0B, 0, 1050, 117000 },
+        { 460800, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x0C, 0, 1050, 117000 },
+        { 499200, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x0D, 0, 1075, 117000 },
+        { 537600, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x0E, 0, 1075, 117000 },
+        { 576000, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x0F, 0, 1100, 117000 },
+        { 614400, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x10, 0, 1100, 117000 },
+        { 652800, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x11, 0, 1125, 117000 },
+        { 691200, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x12, 0, 1150, 117000 },
+        { 729600, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x13, 0, 1175, 117000 },
+        { 768000, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x14, 0, 1200, 128000 },
+        { 806400, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x15, 0, 1225, 128000 },
+        { 844800, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x16, 0, 1250, 128000 },
+        { 883200, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x17, 0, 1275, 128000 },
+        { 921600, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x18, 0, 1275, 128000 },
+        { 960000, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x19, 0, 1275, 128000 },
+        { 998400, CCTL(CLK_TCXO, 1),               SRC_SCPLL, 0x1A, 0, 1275, 128000 },
+	{ 1036800, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x1B, 0, 1275, 128000 },
+	{ 1075200, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x1C, 0, 1275, 128000 },
+	{ 1113600, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x1D, 0, 1275, 128000 },
+        { 1152000, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x1E, 0, 1300, 128000 },
+	{ 1190400, CCTL(CLK_TCXO, 1),		SRC_SCPLL, 0x1F, 0, 1325, 128000 },
 	{ 0 },
 };
 static unsigned long max_axi_rate;
@@ -126,6 +147,7 @@ static void __init acpuclk_init_cpufreq_table(void)
 
 		/* Skip speeds using the global pll */
 		if (acpu_freq_tbl[i].acpu_khz == 256000 ||
+			acpu_freq_tbl[i].acpu_khz == 128000 ||
 				acpu_freq_tbl[i].acpu_khz == 19200)
 			continue;
 
@@ -138,7 +160,7 @@ static void __init acpuclk_init_cpufreq_table(void)
 		}
 
 		/* Take the fastest speed available at the specified VDD level */
-		if (vdd != acpu_freq_tbl[i + 1].vdd)
+		/*if (vdd != acpu_freq_tbl[i + 1].vdd)*/
 			freq_table[i].frequency = acpu_freq_tbl[i].acpu_khz;
 	}
 
@@ -242,7 +264,7 @@ static void scpll_set_freq(uint32_t lval)
 			;
 
 		/* completion bit is not reliable for SHOT switch */
-		udelay(25);
+		udelay(15);
 	}
 
 	/* write the new L val and switch mode */
@@ -328,7 +350,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	DEBUG("acpuclk_set_rate(%d,%d)\n", (int) rate, reason);
 
-	if (rate == cur->acpu_khz || rate == 0)
+	if (rate == 0 || rate == cur->acpu_khz)
 		return 0;
 
 	next = acpu_freq_tbl;
@@ -358,7 +380,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		if (next->vdd > cur->vdd) {
 		rc = acpuclk_set_vdd_level(next->vdd);
 			if (rc) {
-				pr_err("acpuclock: Unable to increase ACPU VDD from %d to %d setting rate to %d.\n", cur->vdd, next->vdd, (int) rate);
+				pr_err("acpuclock: Unable to increase ACPU VDD.\n");
 				mutex_unlock(&drv_state.lock);
 				return rc;
 			}
@@ -413,7 +435,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		if (next->vdd < cur->vdd) {
 			rc = acpuclk_set_vdd_level(next->vdd);
 			if (rc)
-				 pr_err("acpuclock: Unable to drop ACPU VDD from%d to %d setting rate to %d.\n", cur->vdd, next->vdd, (int) rate);
+				pr_err("acpuclock: Unable to drop ACPU VDD.\n");
 		}
 		mutex_unlock(&drv_state.lock);
 	}
@@ -478,7 +500,7 @@ void __init acpu_freq_tbl_fixup(void)
 		max_acpu_khz = 998400;
 		break;
 	case 0x10:
-		max_acpu_khz = 1267200;
+		max_acpu_khz = 1190400;
 		break;
 	default:
 		pr_warning("Invalid efuse data (%x) on Max ACPU freq!\n",
@@ -500,7 +522,7 @@ skip_efuse_fixup:
 
 static void __init acpuclk_init(void)
 {
-	struct clkctl_acpu_speed *speed;
+	struct clkctl_acpu_speed *speed, *max_s;
 	unsigned init_khz;
 
 	init_khz = acpuclk_find_speed();
@@ -520,15 +542,15 @@ static void __init acpuclk_init(void)
 		BUG();
 	}
 
-	/* Move to 768MHz for boot, which is a safe frequency
+	/* Move to 998MHz for boot, which is a safe frequency
 	 * for all versions of Scorpion at the moment.
 	 */
 	speed = acpu_freq_tbl;
 	for (;;) {
-		if (speed->acpu_khz == 768000)
+		if (speed->acpu_khz == 998400)
 			break;
 		if (speed->acpu_khz == 0) {
-			pr_err("acpuclk_init: cannot find 768MHz\n");
+			pr_err("acpuclk_init: cannot find 998MHz\n");
 			BUG();
 		}
 		speed++;
@@ -553,8 +575,11 @@ static void __init acpuclk_init(void)
 
 	loops_per_jiffy = drv_state.current_speed->lpj;
 
-	speed = acpu_freq_tbl + ARRAY_SIZE(acpu_freq_tbl) - 2;
-	max_axi_rate = speed->axiclk_khz * 1000;
+	for (speed = acpu_freq_tbl; speed->acpu_khz != 0; speed++)
+		;
+
+	max_s = speed - 1;
+	max_axi_rate = max_s->axiclk_khz * 1000;
 }
 
 unsigned long acpuclk_get_max_axi_rate(void)
@@ -627,7 +652,6 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	if (clkdata->mpll_khz)
 		acpu_mpll->acpu_khz = clkdata->mpll_khz;
 
-	acpu_freq_tbl_fixup();
 	acpuclk_init();
 	acpuclk_init_cpufreq_table();
 	drv_state.clk_ebi1 = clk_get(NULL,"ebi1_clk");
@@ -643,45 +667,56 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 #endif
 }
 
+#if defined(CONFIG_CPU_FREQ_VDD_LEVELS) && !defined(CONFIG_MSM_CPU_AVS)
 
-#ifdef CONFIG_CPU_FREQ_VDD_LEVELS
-#ifndef CONFIG_MSM_CPU_AVS
 ssize_t acpuclk_get_vdd_levels_str(char *buf)
 {
-	int i, len = 0;
-	if (buf) {
-
-		mutex_lock(&drv_state.lock);
-		for (i = 0; acpu_freq_tbl[i].acpu_khz; i++) 
-		{
-			if (freq_table[i].frequency != CPUFREQ_ENTRY_INVALID)
-				len += sprintf(buf + len, "%8u: %4d\n", acpu_freq_tbl[i].acpu_khz, acpu_freq_tbl[i].vdd);
-		}
-		mutex_unlock(&drv_state.lock);
-	}
-	return len;
+int i, len = 0;
+if (buf)
+{
+mutex_lock(&drv_state.lock);
+for (i = 0; acpu_freq_tbl[i].acpu_khz; i++)
+{
+if (freq_table[i].frequency != CPUFREQ_ENTRY_INVALID)
+len += sprintf(buf + len, "%8u: %4d\n", acpu_freq_tbl[i].acpu_khz, acpu_freq_tbl[i].vdd);
+}
+mutex_unlock(&drv_state.lock);
+}
+return len;
 }
 
 void acpuclk_set_vdd(unsigned acpu_khz, int vdd)
 {
-	int i;
-	vdd = vdd / 25 * 25;	//! regulator only accepts multiples of 25 (mV)
-	mutex_lock(&drv_state.lock);
-	for (i = 0; acpu_freq_tbl[i].acpu_khz; i++)
-	{
-		if (freq_table[i].frequency != CPUFREQ_ENTRY_INVALID)
-		{
-			if (acpu_khz == 0)
-
-				acpu_freq_tbl[i].vdd = min(max((acpu_freq_tbl[i].vdd + vdd), CONFIG_CPU_FREQ_VDD_LEVELS_MIN), 					CONFIG_CPU_FREQ_VDD_LEVELS_MAX);
-
-			else if (acpu_freq_tbl[i].acpu_khz == acpu_khz)
-				acpu_freq_tbl[i].vdd = min(max(vdd, CONFIG_CPU_FREQ_VDD_LEVELS_MIN), CONFIG_CPU_FREQ_VDD_LEVELS_MAX);
-		}
-	}
-	mutex_unlock(&drv_state.lock);
+int i;
+vdd = (vdd / INCREDIBLEC_TPS65023_UV_STEP_MV) * INCREDIBLEC_TPS65023_UV_STEP_MV;
+mutex_lock(&drv_state.lock);
+for (i = 0; acpu_freq_tbl[i].acpu_khz; i++)
+{
+if (freq_table[i].frequency != CPUFREQ_ENTRY_INVALID)
+{
+if (acpu_khz == 0)
+acpu_freq_tbl[i].vdd = min(max((acpu_freq_tbl[i].vdd + vdd), INCREDIBLEC_TPS65023_MIN_UV_MV), INCREDIBLEC_TPS65023_MAX_UV_MV);
+else if (acpu_freq_tbl[i].acpu_khz == acpu_khz)
+acpu_freq_tbl[i].vdd = min(max(vdd, INCREDIBLEC_TPS65023_MIN_UV_MV), INCREDIBLEC_TPS65023_MAX_UV_MV);
+}
+}
+mutex_unlock(&drv_state.lock);
 }
 
-#endif
+unsigned int acpuclk_get_vdd_min(void)
+{
+	 return INCREDIBLEC_TPS65023_MIN_UV_MV;
+}
+
+unsigned int acpuclk_get_vdd_max(void)
+{
+	return INCREDIBLEC_TPS65023_MAX_UV_MV;
+}
+
+unsigned int acpuclk_get_vdd_step(void)
+{
+	return INCREDIBLEC_TPS65023_UV_STEP_MV;
+}
+
 #endif
 
